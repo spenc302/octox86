@@ -1,59 +1,106 @@
 #!/bin/bash
 # ============================================================
-#  post-image.sh
-#  Assembles the final flashable octopi-x86.img using genimage
+#  post-image.sh — Assembles flashable octopi-x86.img
+#  Uses dd + parted + mkfs directly (no genimage)
 # ============================================================
 set -e
 
 BOARD_DIR="$(dirname "$0")"
-GENIMAGE_CFG="${1:-${BOARD_DIR}/genimage.cfg}"
 BINARIES_DIR="${BINARIES_DIR}"
-BUILD_DIR="${BUILD_DIR}"
+TARGET_DIR="${TARGET_DIR}"
+IMAGE="${BINARIES_DIR}/octopi-x86.img"
 
 echo ">>> post-image: Assembling flashable image..."
 
-# Copy GRUB config and kernel to binaries dir for genimage to find
-cp "${BOARD_DIR}/grub.cfg" "${BINARIES_DIR}/grub.cfg"
+# Sizes in MiB
+EFI_SIZE=64
+ROOT_SIZE=3072
+TOTAL_SIZE=$((EFI_SIZE + ROOT_SIZE + 2))  # +2 for GPT overhead
 
-# Set up EFI directory structure for genimage
-mkdir -p "${BINARIES_DIR}/EFI/BOOT"
-cp "${BINARIES_DIR}/efi-part/EFI/BOOT/bootia32.efi" \
-   "${BINARIES_DIR}/EFI/BOOT/bootia32.efi"
+# Create blank image
+dd if=/dev/zero of="${IMAGE}" bs=1M count=${TOTAL_SIZE} status=progress
 
-# Set up grub directory
-mkdir -p "${BINARIES_DIR}/grub"
-cp "${BOARD_DIR}/grub.cfg" "${BINARIES_DIR}/grub/grub.cfg"
+# Partition: GPT, EFI partition + root partition
+parted -s "${IMAGE}" \
+    mklabel gpt \
+    mkpart ESP fat32 1MiB $((EFI_SIZE + 1))MiB \
+    set 1 esp on \
+    mkpart root ext4 $((EFI_SIZE + 1))MiB 100%
+
+# Mount image via loop device
+LOOP=$(losetup --find --show --partscan "${IMAGE}")
+echo ">>> Loop device: ${LOOP}"
+
+# Format EFI partition (FAT32)
+mkfs.vfat -F 32 -n "octopi-boot" "${LOOP}p1"
+
+# Format root partition (ext4)
+mkfs.ext4 -L "octopi-root" "${LOOP}p2"
+
+# Mount EFI and populate it
+EFI_MOUNT=$(mktemp -d)
+mount "${LOOP}p1" "${EFI_MOUNT}"
+
+# GRUB EFI structure
+mkdir -p "${EFI_MOUNT}/EFI/BOOT"
+mkdir -p "${EFI_MOUNT}/grub"
+
+# Copy bootia32.efi (from grub-efi-ia32-bin installed on host)
+if [ -f "${BINARIES_DIR}/efi-part/EFI/BOOT/bootia32.efi" ]; then
+    cp "${BINARIES_DIR}/efi-part/EFI/BOOT/bootia32.efi" \
+       "${EFI_MOUNT}/EFI/BOOT/bootia32.efi"
+else
+    # Fallback: find it from host grub package
+    GRUB_EFI=$(find /usr/lib/grub -name "*.efi" | grep -i ia32 | head -1)
+    if [ -z "${GRUB_EFI}" ]; then
+        GRUB_EFI=$(find / -name "bootia32.efi" 2>/dev/null | head -1)
+    fi
+    if [ -n "${GRUB_EFI}" ]; then
+        cp "${GRUB_EFI}" "${EFI_MOUNT}/EFI/BOOT/bootia32.efi"
+        echo ">>> Used bootia32.efi from: ${GRUB_EFI}"
+    else
+        echo "ERROR: Could not find bootia32.efi"
+        umount "${EFI_MOUNT}"
+        losetup -d "${LOOP}"
+        exit 1
+    fi
+fi
 
 # Copy kernel and initrd
-cp "${BINARIES_DIR}/bzImage" "${BINARIES_DIR}/vmlinuz"
+cp "${BINARIES_DIR}/bzImage" "${EFI_MOUNT}/vmlinuz"
+if [ -f "${BINARIES_DIR}/initrd" ]; then
+    cp "${BINARIES_DIR}/initrd" "${EFI_MOUNT}/initrd.img"
+else
+    touch "${EFI_MOUNT}/initrd.img"  # placeholder if no initrd
+fi
 
-# Copy the WiFi setup template to boot partition
+# Copy GRUB config
+cp "${BOARD_DIR}/grub.cfg" "${EFI_MOUNT}/grub/grub.cfg"
+
+# Copy WiFi setup file
 cp "${BOARD_DIR}/../../overlay/boot/octopi-wpa-supplicant.txt" \
-   "${BINARIES_DIR}/octopi-wpa-supplicant.txt"
+   "${EFI_MOUNT}/octopi-wpa-supplicant.txt"
 
-# Label the root filesystem
-e2label "${BINARIES_DIR}/rootfs.ext4" "octopi-root" || true
+umount "${EFI_MOUNT}"
+rmdir "${EFI_MOUNT}"
 
-# Clean genimage tmp dir
-rm -rf "${BUILD_DIR}/genimage.tmp"
+# Mount root and populate it
+ROOT_MOUNT=$(mktemp -d)
+mount "${LOOP}p2" "${ROOT_MOUNT}"
 
-# Run genimage
-genimage \
-    --rootpath "${TARGET_DIR}" \
-    --tmppath  "${BUILD_DIR}/genimage.tmp" \
-    --inputpath "${BINARIES_DIR}" \
-    --outputpath "${BINARIES_DIR}" \
-    --config "${GENIMAGE_CFG}"
+echo ">>> Copying rootfs to image..."
+rsync -aH --exclude='/THIS_IS_NOT_YOUR_ROOT_FILESYSTEM' \
+    "${TARGET_DIR}/" "${ROOT_MOUNT}/"
+
+umount "${ROOT_MOUNT}"
+rmdir "${ROOT_MOUNT}"
+
+# Detach loop device
+losetup -d "${LOOP}"
 
 echo ""
 echo ">>> post-image: SUCCESS!"
-echo "    Flashable image: ${BINARIES_DIR}/octopi-x86.img"
+ls -lh "${IMAGE}"
 echo ""
-echo "    Flash to USB on Windows:"
-echo "    → Use Rufus or Win32DiskImager"
-echo "    → Select octopi-x86.img and your USB drive"
-echo ""
-echo "    BEFORE FIRST BOOT:"
-echo "    → Open the USB drive in Windows Explorer"
-echo "    → Edit octopi-wpa-supplicant.txt with your WiFi credentials"
-echo ""
+echo "    Flash with Rufus on Windows in DD Image mode"
+echo "    Edit octopi-wpa-supplicant.txt on the USB before first boot"
