@@ -1,0 +1,23 @@
+[Unit]
+Description=OctoPrint Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=octoprint
+Group=octoprint
+SupplementaryGroups=dialout tty
+ExecStart=/usr/bin/octoprint serve --basedir /home/octoprint/.octoprint
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=octoprint
+
+# Allow access to USB serial devices
+DeviceAllow=/dev/ttyUSB0 rw
+DeviceAllow=/dev/ttyACM0 rw
+
+[Install]
+WantedBy=multi-user.target
