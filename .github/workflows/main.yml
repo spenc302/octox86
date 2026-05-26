@@ -13,8 +13,6 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        path: octopi-x86
 
     - name: Install dependencies
       run: |
@@ -49,30 +47,26 @@ jobs:
       id: cache-host-tools
       with:
         path: octopi-x86-output/host
-        key: buildroot-host-2024.11.1-${{ hashFiles('octopi-x86/computestick_defconfig') }}
+        key: buildroot-host-2024.11.1-${{ hashFiles('computestick_defconfig') }}
         restore-keys: |
           buildroot-host-2024.11.1-
 
     - name: Download Buildroot 2024.11.1
       run: |
-        if [ ! -d "buildroot-2024.11.1" ]; then
-          wget -q --show-progress \
-            https://buildroot.org/downloads/buildroot-2024.11.1.tar.gz \
-            -O buildroot.tar.gz
-          tar -xf buildroot.tar.gz
-          rm buildroot.tar.gz
-          echo "Buildroot extracted"
-        else
-          echo "Buildroot already present"
-        fi
+        wget -q --show-progress \
+          https://buildroot.org/downloads/buildroot-2024.11.1.tar.gz \
+          -O buildroot.tar.gz
+        tar -xf buildroot.tar.gz
+        rm buildroot.tar.gz
+        echo "Buildroot extracted"
 
     - name: Configure Buildroot
       run: |
         mkdir -p octopi-x86-output
         make -C buildroot-2024.11.1 \
-          BR2_EXTERNAL=${{ github.workspace }}/octopi-x86 \
+          BR2_EXTERNAL=${{ github.workspace }} \
           O=${{ github.workspace }}/octopi-x86-output \
-          BR2_DEFCONFIG=${{ github.workspace }}/octopi-x86/computestick_defconfig \
+          BR2_DEFCONFIG=${{ github.workspace }}/computestick_defconfig \
           defconfig
         echo "BR2_DL_DIR=\"${{ github.workspace }}/buildroot-downloads\"" \
           >> octopi-x86-output/.config
@@ -80,7 +74,7 @@ jobs:
     - name: Build image
       run: |
         make -C buildroot-2024.11.1 \
-          BR2_EXTERNAL=${{ github.workspace }}/octopi-x86 \
+          BR2_EXTERNAL=${{ github.workspace }} \
           O=${{ github.workspace }}/octopi-x86-output \
           -j$(nproc)
 
