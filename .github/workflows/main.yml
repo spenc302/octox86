@@ -87,14 +87,13 @@ jobs:
 
     - name: Build image
       run: |
-        # Ensure path cleanliness inside the runner execution loop
         export PATH=$(echo $PATH | tr ':' '\n' | grep -v '/mnt/c' | tr '\n' ':' | sed 's/:$//')
-        
         make -C buildroot-2024.11.1 \
           BR2_EXTERNAL=${{ github.workspace }} \
           O=${{ github.workspace }}/octopi-x86-output \
+          HOST_CFLAGS="-O2 -Wno-error=incompatible-pointer-types" \
           -j$(nproc)
-
+          
     - name: Upload image artifact
       uses: actions/upload-artifact@v4
       with:
