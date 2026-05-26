@@ -84,7 +84,13 @@ jobs:
         # 4. Bind the downloads folder
         echo "BR2_DL_DIR=\"${{ github.workspace }}/buildroot-downloads\"" \
           >> octopi-x86-output/.config
-
+ 
+    - name: Fix script permissions
+      run: |
+        chmod +x ${{ github.workspace }}/board/computestick/post-build.sh
+        chmod +x ${{ github.workspace }}/board/computestick/post-image.sh
+        chmod +x ${{ github.workspace }}/overlay/usr/sbin/octopi-firstboot.sh
+    
     - name: Build image
       run: |
         export PATH=$(echo $PATH | tr ':' '\n' | grep -v '/mnt/c' | tr '\n' ':' | sed 's/:$//')
