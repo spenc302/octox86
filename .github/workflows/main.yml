@@ -42,15 +42,14 @@ jobs:
         restore-keys: |
           buildroot-downloads-
 
-    # NOTE: Host tools cache key is updated to explicitly prevent poisoning from old versions
     - name: Cache Buildroot host tools
       uses: actions/cache@v4
       id: cache-host-tools
       with:
         path: octopi-x86-output/host
-        key: buildroot-host-2024.11.1-v2-${{ hashFiles('configs/computestick_defconfig') }}
+        key: buildroot-host-2024.11.1-${{ hashFiles('computestick_defconfig') }}
         restore-keys: |
-          buildroot-host-2024.11.1-v2-
+          buildroot-host-2024.11.1-
 
     - name: Download Buildroot 2024.11.1
       run: |
@@ -61,45 +60,24 @@ jobs:
         rm buildroot.tar.gz
         echo "Buildroot extracted"
 
-    - name: Configure and Migrate Buildroot Config
+    - name: Configure Buildroot
       run: |
         mkdir -p octopi-x86-output
-        
-        # 1. Load the initial base layout from your legacy defconfig
         make -C buildroot-2024.11.1 \
           BR2_EXTERNAL=${{ github.workspace }} \
           O=${{ github.workspace }}/octopi-x86-output \
-          BR2_DEFCONFIG=${{ github.workspace }}/configs/computestick_defconfig \
+          BR2_DEFCONFIG=${{ github.workspace }}/computestick_defconfig \
           defconfig
-          
-        # 2. Silently upgrade and upgrade symbols to 2024.11 schemas, resolving the legacy error
-        make -C buildroot-2024.11.1 \
-          BR2_EXTERNAL=${{ github.workspace }} \
-          O=${{ github.workspace }}/octopi-x86-output \
-          olddefconfig
-          
-        # 3. Clean out explicit legacy blocks to ensure Makefile.legacy remains silent
-        sed -i '/BR2_LEGACY/d' ${{ github.workspace }}/octopi-x86-output/.config
-        
-        # 4. Bind the downloads folder
         echo "BR2_DL_DIR=\"${{ github.workspace }}/buildroot-downloads\"" \
           >> octopi-x86-output/.config
- 
-    - name: Fix script permissions
-      run: |
-        chmod +x ${{ github.workspace }}/board/computestick/post-build.sh
-        chmod +x ${{ github.workspace }}/board/computestick/post-image.sh
-        chmod +x ${{ github.workspace }}/overlay/usr/sbin/octopi-firstboot.sh
-    
+
     - name: Build image
       run: |
-        export PATH=$(echo $PATH | tr ':' '\n' | grep -v '/mnt/c' | tr '\n' ':' | sed 's/:$//')
         make -C buildroot-2024.11.1 \
           BR2_EXTERNAL=${{ github.workspace }} \
           O=${{ github.workspace }}/octopi-x86-output \
-          HOST_CFLAGS="-O2 -Wno-error=incompatible-pointer-types" \
           -j$(nproc)
-          
+
     - name: Upload image artifact
       uses: actions/upload-artifact@v4
       with:
@@ -111,12 +89,8 @@ jobs:
       run: |
         echo "### OctoPi x86 Build Complete" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        if [ -f octopi-x86-output/images/octopi-x86.img ]; then
-          SIZE=$(du -sh octopi-x86-output/images/octopi-x86.img | cut -f1)
-          echo "**Image size:** ${SIZE}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Download the image from the **Artifacts** section above." >> $GITHUB_STEP_SUMMARY
-          echo "Flash with Rufus in DD Image mode." >> $GITHUB_STEP_SUMMARY
-        else
-          echo "⚠️ **Error:** Output image artifact was not found generated." >> $GITHUB_STEP_SUMMARY
-        fi
+        SIZE=$(du -sh octopi-x86-output/images/octopi-x86.img | cut -f1)
+        echo "**Image size:** ${SIZE}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Download the image from the **Artifacts** section above." >> $GITHUB_STEP_SUMMARY
+        echo "Flash with Rufus in DD Image mode." >> $GITHUB_STEP_SUMMARY
