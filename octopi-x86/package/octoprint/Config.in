@@ -1,0 +1,12 @@
+config BR2_PACKAGE_OCTOPRINT
+    bool "octoprint"
+    depends on BR2_PACKAGE_PYTHON3
+    depends on BR2_PACKAGE_PYTHON_PIP
+    select BR2_PACKAGE_PYTHON_SETUPTOOLS
+    select BR2_PACKAGE_PYTHON_WHEEL
+    select BR2_PACKAGE_LIBFFI
+    select BR2_PACKAGE_OPENSSL
+    help
+      OctoPrint is the snappy web interface for your 3D printer.
+
+      https://octoprint.org
