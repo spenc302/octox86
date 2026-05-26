@@ -62,10 +62,14 @@ jobs:
 
     - name: Configure Buildroot
       run: |
-        echo "=== Workspace root ==="
-        ls ${{ github.workspace }}
-        echo "=== Looking for defconfig ==="
-        find ${{ github.workspace }} -name "computestick_defconfig"
+        mkdir -p octopi-x86-output
+        make -C buildroot-2024.11.1 \
+          BR2_EXTERNAL=${{ github.workspace }} \
+          O=${{ github.workspace }}/octopi-x86-output \
+          BR2_DEFCONFIG=${{ github.workspace }}/configs/computestick_defconfig \
+          defconfig
+        echo "BR2_DL_DIR=\"${{ github.workspace }}/buildroot-downloads\"" \
+          >> octopi-x86-output/.config
 
     - name: Build image
       run: |
