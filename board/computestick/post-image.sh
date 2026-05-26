@@ -28,7 +28,7 @@ cp "${BOARD_DIR}/grub.cfg" "${BINARIES_DIR}/grub/grub.cfg"
 cp "${BINARIES_DIR}/bzImage" "${BINARIES_DIR}/vmlinuz"
 
 # Copy the WiFi setup template to boot partition
-cp "${BOARD_DIR}/../overlay/boot/octopi-wpa-supplicant.txt" \
+cp "${BOARD_DIR}/../../overlay/boot/octopi-wpa-supplicant.txt" \
    "${BINARIES_DIR}/octopi-wpa-supplicant.txt"
 
 # Label the root filesystem
