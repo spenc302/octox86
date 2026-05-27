@@ -67,6 +67,20 @@ jobs:
         sed -i '/BR2_LEGACY/d' ${{ github.workspace }}/octopi-x86-output/.config
         echo "BR2_DL_DIR=\"${{ github.workspace }}/buildroot-downloads\"" \
           >> octopi-x86-output/.config
+    - name: Inject WiFi credentials
+      run: |
+        mkdir -p ${{ github.workspace }}/overlay/etc/wpa_supplicant
+        cat > ${{ github.workspace }}/overlay/etc/wpa_supplicant/wpa_supplicant.conf << EOF
+        ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+        update_config=1
+        country=CA
+
+        network={
+            ssid="${{ secrets.WIFI_SSID }}"
+            psk="${{ secrets.WIFI_PASSWORD }}"
+            key_mgmt=WPA-PSK
+        }
+        EOF
 
     - name: Fix script permissions
       run: |
