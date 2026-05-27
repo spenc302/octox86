@@ -1,3 +1,4 @@
+
 name: Build OctoPi x86 Image
  
 on:
@@ -60,6 +61,10 @@ jobs:
           O=${{ github.workspace }}/octopi-x86-output \
           BR2_DEFCONFIG=${{ github.workspace }}/configs/computestick_defconfig \
           defconfig
+        make -C buildroot-2024.11.1 \
+          BR2_EXTERNAL=${{ github.workspace }} \
+          O=${{ github.workspace }}/octopi-x86-output \
+          olddefconfig
         echo "BR2_DL_DIR=\"${{ github.workspace }}/buildroot-downloads\"" \
           >> octopi-x86-output/.config
  
@@ -92,4 +97,3 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "Download the image from the **Artifacts** section above." >> $GITHUB_STEP_SUMMARY
         echo "Flash with Rufus in DD Image mode." >> $GITHUB_STEP_SUMMARY
-  
