@@ -55,24 +55,16 @@ jobs:
     - name: Configure and Migrate Buildroot Config
       run: |
         mkdir -p octopi-x86-output
-
-        # 1. Load the initial base layout from your defconfig
         make -C buildroot-2024.11.1 \
           BR2_EXTERNAL=${{ github.workspace }} \
           O=${{ github.workspace }}/octopi-x86-output \
           BR2_DEFCONFIG=${{ github.workspace }}/configs/computestick_defconfig \
           defconfig
-
-        # 2. Silently upgrade symbols to 2024.11 schemas
         make -C buildroot-2024.11.1 \
           BR2_EXTERNAL=${{ github.workspace }} \
           O=${{ github.workspace }}/octopi-x86-output \
           olddefconfig
-
-        # 3. Remove any remaining legacy blocks
         sed -i '/BR2_LEGACY/d' ${{ github.workspace }}/octopi-x86-output/.config
-
-        # 4. Bind the downloads folder
         echo "BR2_DL_DIR=\"${{ github.workspace }}/buildroot-downloads\"" \
           >> octopi-x86-output/.config
 
@@ -81,6 +73,11 @@ jobs:
         chmod +x ${{ github.workspace }}/board/computestick/post-build.sh
         chmod +x ${{ github.workspace }}/board/computestick/post-image.sh
         chmod +x ${{ github.workspace }}/overlay/usr/sbin/octopi-firstboot.sh
+
+    - name: Enable loop devices
+      run: |
+        sudo modprobe loop
+        sudo losetup -a
 
     - name: Build image
       run: |
