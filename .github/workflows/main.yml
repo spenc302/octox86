@@ -1,19 +1,21 @@
 name: Build OctoPi x86 Image
-
+ 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
-
+ 
 jobs:
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 360
-
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+ 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-
+ 
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -22,18 +24,8 @@ jobs:
           cpio unzip rsync bc libncurses-dev libssl-dev \
           python3 python3-pip bison flex file \
           mtools dosfstools e2fsprogs parted \
-          grub-efi-ia32-bin \
-          libconfuse-dev autoconf automake libtool pkg-config
-
-    - name: Build and install genimage
-      run: |
-        git clone https://github.com/pengutronix/genimage.git /tmp/genimage
-        cd /tmp/genimage
-        autoreconf -i
-        ./configure
-        make -j$(nproc)
-        sudo make install
-
+          grub-efi-ia32-bin
+ 
     - name: Cache Buildroot downloads
       uses: actions/cache@v4
       with:
@@ -41,16 +33,16 @@ jobs:
         key: buildroot-downloads-2024.11.1
         restore-keys: |
           buildroot-downloads-
-
+ 
     - name: Cache Buildroot host tools
       uses: actions/cache@v4
       id: cache-host-tools
       with:
         path: octopi-x86-output/host
-        key: buildroot-host-2024.11.1-${{ hashFiles('computestick_defconfig') }}
+        key: buildroot-host-2024.11.1-${{ hashFiles('configs/computestick_defconfig') }}
         restore-keys: |
           buildroot-host-2024.11.1-
-
+ 
     - name: Download Buildroot 2024.11.1
       run: |
         wget -q --show-progress \
@@ -59,32 +51,38 @@ jobs:
         tar -xf buildroot.tar.gz
         rm buildroot.tar.gz
         echo "Buildroot extracted"
-
+ 
     - name: Configure Buildroot
       run: |
         mkdir -p octopi-x86-output
         make -C buildroot-2024.11.1 \
           BR2_EXTERNAL=${{ github.workspace }} \
           O=${{ github.workspace }}/octopi-x86-output \
-          BR2_DEFCONFIG=${{ github.workspace }}/computestick_defconfig \
+          BR2_DEFCONFIG=${{ github.workspace }}/configs/computestick_defconfig \
           defconfig
         echo "BR2_DL_DIR=\"${{ github.workspace }}/buildroot-downloads\"" \
           >> octopi-x86-output/.config
-
+ 
+    - name: Fix script permissions
+      run: |
+        chmod +x ${{ github.workspace }}/board/computestick/post-build.sh
+        chmod +x ${{ github.workspace }}/board/computestick/post-image.sh
+        chmod +x ${{ github.workspace }}/overlay/usr/sbin/octopi-firstboot.sh
+ 
     - name: Build image
       run: |
         make -C buildroot-2024.11.1 \
           BR2_EXTERNAL=${{ github.workspace }} \
           O=${{ github.workspace }}/octopi-x86-output \
           -j$(nproc)
-
+ 
     - name: Upload image artifact
       uses: actions/upload-artifact@v4
       with:
         name: octopi-x86-image
         path: octopi-x86-output/images/octopi-x86.img
         retention-days: 30
-
+ 
     - name: Build summary
       run: |
         echo "### OctoPi x86 Build Complete" >> $GITHUB_STEP_SUMMARY
@@ -94,3 +92,4 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "Download the image from the **Artifacts** section above." >> $GITHUB_STEP_SUMMARY
         echo "Flash with Rufus in DD Image mode." >> $GITHUB_STEP_SUMMARY
+  
