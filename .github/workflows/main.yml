@@ -1,22 +1,21 @@
-
 name: Build OctoPi x86 Image
- 
+
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
- 
+
 jobs:
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 360
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
- 
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
- 
+
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -26,7 +25,7 @@ jobs:
           python3 python3-pip bison flex file \
           mtools dosfstools e2fsprogs parted \
           grub-efi-ia32-bin
- 
+
     - name: Cache Buildroot downloads
       uses: actions/cache@v4
       with:
@@ -34,16 +33,16 @@ jobs:
         key: buildroot-downloads-2024.11.1
         restore-keys: |
           buildroot-downloads-
- 
+
     - name: Cache Buildroot host tools
       uses: actions/cache@v4
       id: cache-host-tools
       with:
         path: octopi-x86-output/host
-        key: buildroot-host-2024.11.1-${{ hashFiles('configs/computestick_defconfig') }}
+        key: buildroot-host-2024.11.1-v2-${{ hashFiles('configs/computestick_defconfig') }}
         restore-keys: |
-          buildroot-host-2024.11.1-
- 
+          buildroot-host-2024.11.1-v2-
+
     - name: Download Buildroot 2024.11.1
       run: |
         wget -q --show-progress \
@@ -52,48 +51,62 @@ jobs:
         tar -xf buildroot.tar.gz
         rm buildroot.tar.gz
         echo "Buildroot extracted"
- 
-    - name: Configure Buildroot
+
+    - name: Configure and Migrate Buildroot Config
       run: |
         mkdir -p octopi-x86-output
+
+        # 1. Load the initial base layout from your defconfig
         make -C buildroot-2024.11.1 \
           BR2_EXTERNAL=${{ github.workspace }} \
           O=${{ github.workspace }}/octopi-x86-output \
           BR2_DEFCONFIG=${{ github.workspace }}/configs/computestick_defconfig \
           defconfig
+
+        # 2. Silently upgrade symbols to 2024.11 schemas
         make -C buildroot-2024.11.1 \
           BR2_EXTERNAL=${{ github.workspace }} \
           O=${{ github.workspace }}/octopi-x86-output \
           olddefconfig
+
+        # 3. Remove any remaining legacy blocks
+        sed -i '/BR2_LEGACY/d' ${{ github.workspace }}/octopi-x86-output/.config
+
+        # 4. Bind the downloads folder
         echo "BR2_DL_DIR=\"${{ github.workspace }}/buildroot-downloads\"" \
           >> octopi-x86-output/.config
- 
+
     - name: Fix script permissions
       run: |
         chmod +x ${{ github.workspace }}/board/computestick/post-build.sh
         chmod +x ${{ github.workspace }}/board/computestick/post-image.sh
         chmod +x ${{ github.workspace }}/overlay/usr/sbin/octopi-firstboot.sh
- 
+
     - name: Build image
       run: |
+        export PATH=$(echo $PATH | tr ':' '\n' | grep -v '/mnt/c' | tr '\n' ':' | sed 's/:$//')
         make -C buildroot-2024.11.1 \
           BR2_EXTERNAL=${{ github.workspace }} \
           O=${{ github.workspace }}/octopi-x86-output \
           -j$(nproc)
- 
+
     - name: Upload image artifact
       uses: actions/upload-artifact@v4
       with:
         name: octopi-x86-image
         path: octopi-x86-output/images/octopi-x86.img
         retention-days: 30
- 
+
     - name: Build summary
       run: |
         echo "### OctoPi x86 Build Complete" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        SIZE=$(du -sh octopi-x86-output/images/octopi-x86.img | cut -f1)
-        echo "**Image size:** ${SIZE}" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "Download the image from the **Artifacts** section above." >> $GITHUB_STEP_SUMMARY
-        echo "Flash with Rufus in DD Image mode." >> $GITHUB_STEP_SUMMARY
+        if [ -f octopi-x86-output/images/octopi-x86.img ]; then
+          SIZE=$(du -sh octopi-x86-output/images/octopi-x86.img | cut -f1)
+          echo "**Image size:** ${SIZE}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Download the image from the **Artifacts** section above." >> $GITHUB_STEP_SUMMARY
+          echo "Flash with Rufus in DD Image mode." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️ **Error:** Output image was not found." >> $GITHUB_STEP_SUMMARY
+        fi
