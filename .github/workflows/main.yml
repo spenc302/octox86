@@ -71,18 +71,17 @@ jobs:
     - name: Inject WiFi credentials
       run: |
         mkdir -p ${{ github.workspace }}/overlay/etc/wpa_supplicant
-        cat > ${{ github.workspace }}/overlay/etc/wpa_supplicant/wpa_supplicant-wlan0.conf << EOF
-ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
-update_config=1
-country=CA
-
-network={
-    ssid="${{ secrets.WIFI_SSID }}"
-    psk="${{ secrets.WIFI_PASSWORD }}"
-    key_mgmt=WPA-PSK
-}
-EOF
-
+        cat > ${{ github.workspace }}/overlay/etc/wpa_supplicant/wpa_supplicant-wlan0.conf << 'EOF'
+        ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+        update_config=1
+        country=CA
+          
+        network={
+            ssid="${{ secrets.WIFI_SSID }}"
+            pski="${{ secrets.WIFI_PASSWORD }}"
+            key_mgmt=WPA-PSK
+        }
+    
     - name: Fix script permissions
       run: |
         chmod +x ${{ github.workspace }}/board/computestick/post-build.sh
