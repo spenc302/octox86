@@ -1,11 +1,12 @@
 # ============================================================
 #  OctoPi x86 Buildroot Defconfig
 #  Target: Intel Compute Stick STCK1A32WFC
-#  CPU:    Intel Atom Z3735F (x86_64, 32-bit UEFI)
+#  CPU:    Intel Atom Z3735F (32-bit UEFI, x64 processor)
 # ============================================================
 
-# Architecture — 64-bit userspace, bootia32.efi handles UEFI handoff
-BR2_x86_64=y
+# Architecture — 32-bit to match 32-bit UEFI firmware
+BR2_i386=y
+BR2_i386_generic=y
 
 # Toolchain
 BR2_TOOLCHAIN_BUILDROOT_GLIBC=y
